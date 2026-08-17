@@ -10,5 +10,5 @@ Un archivo Markdown (SKILL.md) que describe cómo operar sobre un input dado den
 - Salida lista para copiar o descargar como ~/skills/<nombre>/SKILL.md. Sin dependencias ni build: se abre el HTML en el navegador, sea cual sea.
 
 ---
-<center><img width="500" height="500" alt="37e312a2-fc83-4818-bb9d-52b044bf39fe" src="https://github.com/user-attachments/assets/dfef1be1-494f-472f-9006-c641a749a4b0" /></center>
+<img width="1000" height="1000" alt="37e312a2-fc83-4818-bb9d-52b044bf39fe" src="https://github.com/user-attachments/assets/dfef1be1-494f-472f-9006-c641a749a4b0" />
 
