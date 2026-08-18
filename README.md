@@ -9,6 +9,12 @@ Un archivo Markdown (SKILL.md) que describe cómo operar sobre un input dado den
 - Medidor de fuerza de disparo, el factor que más incide en que la skill se activa cuando corresponde.
 - Salida lista para copiar o descargar como ~/skills/<nombre>/SKILL.md. Sin dependencias ni build: se abre el HTML en el navegador, sea cual sea.
 
+### Descarga y uso del template 
+- Seleccionar y descargar el skill-forge-dark.html
+- Luego de descargar el template simplemente ir a la carpeta de descarga (Downloads). Haz click derecho sobre el archivo y seleccionar abrir con Google o Egde.
+- Rellenar los datos en base a lo que indica el template
+
 ---
+
 <img width="1000" height="1000" alt="37e312a2-fc83-4818-bb9d-52b044bf39fe" src="https://github.com/user-attachments/assets/dfef1be1-494f-472f-9006-c641a749a4b0" />
 
