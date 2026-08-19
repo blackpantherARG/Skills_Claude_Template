@@ -1,7 +1,7 @@
 # Skills_Claude_Template 🗺️
 ### 🥷 SKILLS - 
 #### ¿Qué es una skill?
-Un archivo Markdown (SKILL.md) que describe cómo operar sobre un input dado dentro de un contexto determinado: mismo input, mismo procedimiento, mismo formato de salida. Es la unidad que permite replicar un criterio de trabajo en lugar de reexplicarlo en cada conversación.
+Un archivo Markdown (SKILL.md) que describe cómo operar sobre un input dado dentro de un contexto determinado: mismo input, mismo procedimiento, mismo formato de salida. Es la unidad que permite replicar un criterio de trabajo en lugar de reexplicarlo en cada conversación. Esto permite ser eficiente en el tratamiento o procesamiento de datos y puede ser aplicado tanto en su versión Desktop o CLI.
 
 #### Qué incluye
 - Formulario guiado en tres niveles: metadata (siempre en contexto), cuerpo (se carga al dispararse) y recursos (solo bajo demanda).
@@ -12,7 +12,9 @@ Un archivo Markdown (SKILL.md) que describe cómo operar sobre un input dado den
 ### Descarga y uso del template 
 - Seleccionar y descargar el skill-forge-dark.html
 - Luego de descargar el template simplemente ir a la carpeta de descarga (Downloads). Haz click derecho sobre el archivo y seleccionar abrir con Google o Egde.
-- Rellenar los datos en base a lo que indica el template
+- Rellenar los datos se solicita en cada apartado.
+
+>> *Existen diferentes ejemplos dentro del templata para tomarlo a modo de ejemplo.*
 
 ---
 
