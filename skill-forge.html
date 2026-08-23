@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>skill-forge // compilador y linter de SKILL.md</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root{
+  /* fósforo CRT sobre negro azulado — no negro puro, quema menos */
+  --void:#05080A;
+  --panel:#0A0F12;
+  --panel-2:#0E151A;
+  --grid:#16232B;
+  --grid-2:#101A20;
+  /* ANSI */
+  --phos:#43F58C;
+  --phos-dim:#1E7A47;
+  --cyan:#3ED0F0;
+  --cyan-dim:#1C6B80;
+  --amber:#F2B23C;
+  --red:#FF5C4D;
+  --violet:#B37DF0;
+  --violet-dim:#5E3F80;
+  --txt:#9FB8AE;
+  --txt-dim:#54706A;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --glow:0 0 6px rgba(67,245,140,.45);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--void);
+  color:var(--txt);
+  font-family:var(--mono);
+  font-size:13px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+/* scanlines + viñeta: muy sutiles, no deben estorbar la lectura */
+body::before{
+  content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;
+  background:repeating-linear-gradient(to bottom,transparent 0 2px,rgba(0,0,0,.22) 2px 3px);
+  opacity:.5;
+}
+body::after{
+  content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 40%,transparent 55%,rgba(0,0,0,.55) 100%);
+}
+:focus-visible{outline:1px solid var(--phos);outline-offset:2px;box-shadow:var(--glow)}
+::selection{background:var(--phos-dim);color:#04140A}
+
+/* ── cabecera ─────────────────────────────────────────── */
+header{border-bottom:1px solid var(--grid);background:var(--panel);padding:14px 20px 12px}
+.masthead{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;max-width:1420px;margin:0 auto}
+pre.banner{
+  margin:0 0 6px;font-size:8px;line-height:1.05;color:var(--phos);
+  text-shadow:var(--glow);letter-spacing:0;
+}
+@media(max-width:760px){pre.banner{display:none}}
+
+/* ── marca ────────────────────────────────────────────── */
+.brand{display:flex;align-items:center;gap:15px;min-width:0}
+.mark{
+  flex:none;height:64px;width:auto;color:var(--phos);
+  filter:drop-shadow(0 0 8px rgba(67,245,140,.45));
+  animation:boot .85s steps(1) 1;
+}
+/* encendido de tubo: una sola vez, al cargar */
+@keyframes boot{
+  0%{opacity:0}8%{opacity:.85}13%{opacity:.08}
+  21%{opacity:1}26%{opacity:.25}34%{opacity:1}
+  39%{opacity:.65}47%{opacity:1}100%{opacity:1}
+}
+.brand-rule{flex:none;width:1px;align-self:stretch;background:var(--grid);margin:4px 0}
+.wordmark{min-width:0}
+@media(max-width:760px){.mark{height:46px}.brand{gap:12px}}
+.tagline{font-size:12px;color:var(--txt-dim);margin:0;max-width:66ch}
+.tagline b{color:var(--phos);font-weight:500}
+.prompt{color:var(--cyan)}
+.cur{
+  display:inline-block;width:7px;height:13px;background:var(--phos);
+  vertical-align:-2px;margin-left:3px;box-shadow:var(--glow);animation:bl 1.1s steps(1) infinite;
+}
+@keyframes bl{0%,50%{opacity:1}51%,100%{opacity:0}}
+
+.levels{display:flex;gap:5px;font-size:10px;flex-wrap:wrap}
+.lvl{border:1px solid var(--grid);background:var(--panel-2);padding:3px 8px;color:var(--txt-dim);white-space:nowrap}
+.lvl b{color:var(--phos);font-weight:500}
+.lvl.warn{border-color:var(--amber);color:var(--amber)}.lvl.warn b{color:var(--amber)}
+.lvl.bad{border-color:var(--red);color:var(--red)}.lvl.bad b{color:var(--red)}
+
+/* ── estructura ───────────────────────────────────────── */
+main{max-width:1420px;margin:0 auto;padding:18px 20px 60px;
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+@media(max-width:1000px){main{grid-template-columns:1fr;gap:18px}}
+.pane{min-width:0}
+.right{position:sticky;top:14px}
+@media(max-width:1000px){.right{position:static}}
+
+section.block{margin-bottom:22px}
+.eyebrow{
+  font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--txt-dim);
+  display:flex;align-items:center;gap:8px;margin-bottom:9px;
+}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--grid)}
+.eyebrow .n{color:var(--phos);text-shadow:var(--glow)}
+.eyebrow .always{color:var(--red);border:1px solid var(--red);padding:1px 5px;letter-spacing:.05em;text-transform:none;font-size:9px}
+
+/* plegables: cerrados por defecto, el linter avisa si hay algo adentro */
+details.fold{margin-bottom:22px;border:0}
+details.fold>summary{
+  list-style:none;cursor:pointer;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--txt-dim);display:flex;align-items:center;gap:8px;margin-bottom:9px;
+}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::after{content:"";flex:1;height:1px;background:var(--grid)}
+details.fold>summary .n{color:var(--cyan);text-shadow:0 0 6px rgba(62,208,240,.4)}
+details.fold>summary .caret{color:var(--txt-dim);font-size:9px;width:9px;flex:none}
+details.fold[open]>summary .caret::before{content:"\25BE"}
+details.fold>summary .caret::before{content:"\25B8"}
+details.fold>summary:hover{color:var(--txt)}
+.sec-badge{
+  font-size:9px;letter-spacing:.05em;text-transform:none;padding:1px 5px;flex:none;
+  border:1px solid var(--amber);color:var(--amber);opacity:0;transition:opacity .2s;
+}
+.sec-badge.show{opacity:1}
+details.fold>summary .opt{font-size:9px;letter-spacing:.05em;text-transform:none;color:var(--txt-dim);
+  border:1px solid var(--grid);padding:1px 5px;flex:none}
+.fold-in{padding-left:17px;border-left:1px solid var(--grid-2);margin-left:4px}
+@media(max-width:520px){.fold-in{padding-left:9px}}
+
+label{display:block;margin-bottom:12px}
+.lab{font-size:11.5px;color:var(--phos);display:flex;gap:8px;align-items:baseline;margin-bottom:4px;flex-wrap:wrap}
+.lab.c{color:var(--cyan)}
+.lab.v{color:var(--violet)}
+.hint{color:var(--txt-dim);font-size:11px;line-height:1.4;font-weight:400}
+.count{font-size:10px;color:var(--txt-dim);margin-left:auto}
+.count.warn{color:var(--amber)}.count.bad{color:var(--red)}
+input[type=text],textarea,select{
+  width:100%;font-family:var(--mono);font-size:12.5px;line-height:1.5;
+  padding:7px 9px;border:1px solid var(--grid);background:var(--panel-2);color:var(--txt);border-radius:0;
+}
+input::placeholder,textarea::placeholder{color:#3A4F4A}
+input[type=text]:focus,textarea:focus,select:focus{
+  border-color:var(--phos-dim);background:#0C1418;color:var(--phos);outline:none;
+}
+textarea{resize:vertical;min-height:60px}
+select{cursor:pointer}
+select option{background:var(--panel-2);color:var(--txt)}
+
+.step{display:flex;gap:7px;align-items:flex-start;margin-bottom:6px}
+.step .num{font-size:11px;color:var(--phos-dim);border:1px solid var(--grid);background:var(--panel);
+  min-width:24px;height:29px;display:flex;align-items:center;justify-content:center;flex:none}
+.step input{flex:1;min-width:0}
+.step .kill{flex:none;width:29px;height:29px;border:1px solid var(--grid);background:var(--panel);
+  color:var(--txt-dim);cursor:pointer;font-family:var(--mono);font-size:14px;line-height:1}
+.step .kill:hover{border-color:var(--red);color:var(--red)}
+.step .move{flex:none;display:flex;flex-direction:column;width:21px;height:29px;gap:1px}
+.step .move button{flex:1;border:1px solid var(--grid);background:var(--panel);color:var(--txt-dim);
+  cursor:pointer;font-family:var(--mono);font-size:7px;line-height:1;padding:0}
+.step .move button:hover:not(:disabled){border-color:var(--cyan);color:var(--cyan)}
+.step .move button:disabled{opacity:.3;cursor:default}
+.saved{font-size:10px;color:var(--txt-dim);opacity:0;transition:opacity .25s;white-space:nowrap}
+.saved.on{opacity:1;color:var(--phos-dim)}
+
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.chip{font-family:var(--mono);font-size:10.5px;padding:2px 6px;border:1px solid var(--phos-dim);
+  color:var(--phos-dim);background:transparent;cursor:pointer}
+.chip:hover{border-color:var(--phos);color:var(--phos)}
+.chip.on{background:var(--phos-dim);border-color:var(--phos);color:#04140A}
+.chip.tool{border-color:var(--cyan-dim);color:var(--cyan-dim)}
+.chip.tool:hover{border-color:var(--cyan);color:var(--cyan)}
+.chip.tool.on{background:var(--cyan-dim);border-color:var(--cyan);color:#03161C}
+
+/* tarjeta de servidor MCP */
+.mcp{border:1px solid var(--grid);background:var(--panel-2);padding:9px;margin-bottom:7px;position:relative}
+.mcp .kill{position:absolute;top:6px;right:6px;width:22px;height:22px;border:1px solid var(--grid);
+  background:var(--panel);color:var(--txt-dim);cursor:pointer;font-family:var(--mono);font-size:13px;line-height:1}
+.mcp .kill:hover{border-color:var(--red);color:var(--red)}
+.mcp .duo{display:flex;gap:7px}
+.mcp .duo>label{flex:1;min-width:0}
+@media(max-width:560px){.mcp .duo{flex-direction:column;gap:0}}
+.mcp label{margin-bottom:7px}
+.mcp label:last-child{margin-bottom:0}
+.mcp .lab{font-size:10.5px}
+.mcp input{padding-right:26px}
+
+/* banco de frases */
+.phr{display:flex;gap:7px;align-items:flex-start;margin-bottom:6px}
+.phr input{flex:1;min-width:0}
+.phr .pol{flex:none;width:34px;height:29px;border:1px solid var(--grid);background:var(--panel);
+  cursor:pointer;font-family:var(--mono);font-size:10px;line-height:1;color:var(--txt-dim)}
+.phr .pol.yes{border-color:var(--phos-dim);color:var(--phos)}
+.phr .pol.no{border-color:var(--red);color:var(--red)}
+.phr .kill{flex:none;width:29px;height:29px;border:1px solid var(--grid);background:var(--panel);
+  color:var(--txt-dim);cursor:pointer;font-family:var(--mono);font-size:14px;line-height:1}
+.phr .kill:hover{border-color:var(--red);color:var(--red)}
+.phr .mini{flex:none;width:46px;height:29px;display:flex;gap:1px;align-items:center}
+.phr .mini i{flex:1;height:12px;background:var(--grid-2)}
+.phr .mini i.on{background:var(--phos)}
+.phr .mini i.bad{background:var(--red)}
+.phr .mini i.mid{background:var(--amber)}
+
+.btn{font-family:var(--mono);font-size:11.5px;font-weight:500;padding:6px 12px;
+  border:1px solid var(--phos-dim);background:transparent;color:var(--phos);cursor:pointer;border-radius:0}
+.btn:hover{background:var(--phos-dim);color:#04140A;box-shadow:var(--glow)}
+.btn.ghost{border-color:var(--grid);color:var(--txt-dim)}
+.btn.ghost:hover{background:transparent;border-color:var(--cyan);color:var(--cyan);box-shadow:none}
+.btn.sm{font-size:11px;padding:4px 9px}
+.row{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.note{font-size:10.5px;color:var(--txt-dim);line-height:1.45;margin:0 0 10px}
+.note b{color:var(--amber);font-weight:500}
+
+/* ── salida ───────────────────────────────────────────── */
+.out{border:1px solid var(--grid);background:var(--panel)}
+.out-bar,.diag-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:7px 11px;border-bottom:1px solid var(--grid);background:var(--panel-2)}
+.fname{font-size:11.5px;color:var(--phos);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fname span{color:var(--txt-dim)}
+pre.code{margin:0;padding:12px;overflow-x:auto;font-size:11.6px;line-height:1.62;max-height:42vh;color:var(--txt)}
+.code .fm{color:var(--violet)}
+.code .key{color:var(--cyan)}
+.code .h{color:var(--phos);text-shadow:var(--glow)}
+.code .li{color:var(--txt)}
+.code .dim{color:#2C3E3A}
+.dest{border-top:1px solid var(--grid);padding:6px 11px;font-size:10px;color:var(--txt-dim);line-height:1.6}
+.dest code{border:0;background:transparent;padding:0;color:var(--cyan-dim);font-size:10px}
+
+/* ── diagnósticos ─────────────────────────────────────── */
+.diag{border:1px solid var(--grid);background:var(--panel);margin-top:14px}
+.diag-bar .t{font-size:11px;letter-spacing:.1em;color:var(--phos)}
+.tally{font-size:10.5px;color:var(--txt-dim)}
+.tally b{font-weight:500}
+.tally .e{color:var(--red)}.tally .w{color:var(--amber)}.tally .o{color:var(--phos)}
+
+.gauge{padding:11px 11px 3px}
+.gauge-lab{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;
+  color:var(--txt-dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.gauge-lab b{font-size:16px;letter-spacing:0;color:var(--phos);text-shadow:var(--glow)}
+.bars{display:flex;gap:2px}
+.bars i{flex:1;height:8px;background:var(--grid-2);transition:background .22s,box-shadow .22s}
+.bars i.on{background:var(--phos);box-shadow:0 0 5px rgba(67,245,140,.6)}
+.bars i.mid{background:var(--amber);box-shadow:0 0 5px rgba(242,178,60,.5)}
+.bars i.low{background:var(--red);box-shadow:0 0 5px rgba(255,92,77,.5)}
+
+ul.msgs{list-style:none;margin:0;padding:5px 0 9px;max-height:46vh;overflow-y:auto}
+ul.msgs li{display:flex;gap:8px;padding:4px 11px;font-size:11.8px;line-height:1.45;border-top:1px solid var(--grid-2)}
+ul.msgs li:first-child{border-top:none}
+.tag{font-size:10px;font-weight:500;flex:none;margin-top:1px;white-space:pre}
+.t-e{color:var(--red)}.t-w{color:var(--amber)}.t-o{color:var(--phos-dim)}
+.msg-b{color:var(--txt)}
+.msg-x{color:var(--txt-dim)}
+code{font-family:var(--mono);font-size:11px;color:var(--cyan);background:var(--panel-2);padding:0 3px;border:1px solid var(--grid)}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(10px);
+  background:var(--panel-2);border:1px solid var(--phos);color:var(--phos);font-size:11.5px;
+  padding:7px 15px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:20;
+  box-shadow:var(--glow);max-width:88vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* ── pie ──────────────────────────────────────────────── */
+footer{border-top:1px solid var(--grid);background:var(--panel);padding:20px;margin-top:-40px}
+.foot{max-width:1420px;margin:0 auto;display:flex;align-items:center;gap:13px;justify-content:center;
+  flex-wrap:wrap;text-align:center}
+.foot .mark{height:34px;animation:none;filter:drop-shadow(0 0 5px rgba(67,245,140,.28));color:var(--phos-dim)}
+.foot p{margin:0;font-size:10.5px;color:var(--txt-dim);line-height:1.55}
+.foot b{color:var(--phos-dim);font-weight:500}
+
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}
+  body::before{display:none}.cur{opacity:1}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="masthead">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 1055 1340" role="img" aria-label="PV"><title>PV</title><path fill="currentColor" fill-rule="evenodd" d="M232.4,1014.4C111.9,842.8 13.0,701.9 12.6,701.2C12.0,700.3 56.2,700.0 231.9,700.0L452.0,700.0L452.0,812.8L452.0,925.7L442.8,933.6C437.7,938.0 409.6,961.9 380.3,986.8L327.2,1032.1L383.7,1112.8C414.8,1157.2 442.9,1197.2 446.1,1201.8L452.0,1210.0L451.8,1268.2L451.5,1326.3L232.4,1014.4Z M514.0,1013.2L514.0,700.0L561.0,700.0L608.0,700.0L608.2,877.0L608.5,1053.9L732.0,878.8C799.9,782.5 856.2,702.8 857.0,701.8C858.4,700.0 860.9,700.0 907.3,700.2L956.1,700.5L735.9,1012.5C614.8,1184.1 515.4,1324.9 514.9,1325.5C514.4,1326.0 514.0,1192.8 514.0,1013.2Z M372.8,916.6L387.0,896.2L387.0,829.1L387.0,762.0L305.0,762.0L222.9,762.0L229.7,770.8C233.4,775.6 263.7,815.0 296.9,858.3C330.1,901.6 357.6,937.0 357.9,937.0C358.2,937.0 364.9,927.8 372.8,916.6Z M676.0,655.5C675.4,654.7 675.0,653.4 675.2,652.6C675.4,651.8 692.0,633.8 712.1,612.8C774.6,547.4 775.5,546.2 775.4,533.5C775.2,515.9 756.0,486.9 721.6,452.4C696.8,427.6 680.3,414.4 638.9,386.0C601.3,360.2 587.9,350.6 574.0,339.1C549.5,319.0 520.1,289.3 495.5,259.7C489.6,252.6 484.5,247.0 484.0,247.2C483.6,247.4 480.0,251.6 476.0,256.5C462.3,273.3 448.6,288.5 431.0,306.1C403.1,334.1 388.5,345.8 339.0,380.0C286.1,416.6 273.0,426.9 248.4,451.4C211.8,488.1 189.3,524.6 193.8,539.8C196.1,547.4 211.7,565.6 253.2,609.2C265.4,622.0 278.9,636.2 283.2,640.7C291.0,649.0 292.3,651.7 289.5,654.0C287.5,655.7 284.3,654.2 271.0,645.7C220.3,612.9 182.4,580.7 173.3,562.5C169.7,555.4 168.7,548.4 169.3,533.4C170.2,513.0 171.0,509.3 178.3,493.5C192.2,463.2 209.2,418.9 227.3,365.5C260.7,267.5 283.8,209.6 311.5,155.0C328.7,121.2 336.5,112.7 376.5,83.5C409.2,59.6 466.8,25.0 473.8,25.0C478.7,25.0 478.5,23.5 481.6,120.5C483.8,192.4 484.6,212.7 484.9,199.5C485.0,197.3 485.9,166.2 487.0,130.5C490.4,17.2 489.8,25.0 494.7,25.0C503.9,25.0 560.8,59.7 601.8,90.4C623.4,106.6 636.6,118.9 643.2,128.9C655.8,148.1 681.9,204.7 703.7,259.7C715.0,288.4 736.4,347.0 740.0,359.1C748.7,388.2 763.7,429.9 776.2,460.0C798.6,513.6 800.5,519.7 800.5,538.0C800.4,555.4 796.0,565.9 782.4,580.9C767.5,597.4 724.0,630.3 689.2,651.4C679.3,657.4 677.9,657.8 676.0,655.5Z M468.5,570.2C427.8,548.9 380.2,511.4 366.1,489.6C360.7,481.3 360.3,480.1 362.2,478.2C365.1,475.3 370.4,477.7 432.5,510.8C468.9,530.2 477.8,534.5 483.0,535.4C487.8,536.3 494.3,533.3 537.7,510.2C602.6,475.7 608.1,473.4 608.0,480.3C607.9,483.4 595.8,500.1 587.5,508.5C565.5,530.8 499.0,575.0 485.3,576.6C482.1,577.0 479.4,576.0 468.5,570.2Z"/></svg>
+      <div class="brand-rule"></div>
+      <div class="wordmark">
+<pre class="banner"> ___ _  _____ _    _      ___ ___  ___  ___ ___
+/ __| |/ /_ _| |  | |    | __/ _ \| _ \/ __| __|
+\__ \ ' < | || |__| |__  | _| (_) |   / (_ | _|
+|___/_|\_\___|____|____| |_| \___/|_|_\\___|___|</pre>
+      <p class="tagline"><span class="prompt">$</span> compila un <b>SKILL.md</b> válido y te dice por qué no va a dispararse<span class="cur"></span></p>
+      </div>
+    </div>
+    <div class="levels" id="levels">
+      <div class="lvl" id="lvl1">N1 metadata <b>0</b> car</div>
+      <div class="lvl" id="lvl2">N2 cuerpo <b>0</b>/500 lín</div>
+      <div class="lvl" id="lvl3">N3 recursos <b>0</b></div>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="pane">
+
+  <section class="block">
+    <div class="eyebrow"><span class="n">00</span> punto de partida</div>
+    <label>
+      <span class="lab">plantilla</span>
+      <select id="preset">
+        <option value="blank">En blanco</option>
+        <option value="triage">Triage de artefacto</option>
+        <option value="playbook">Playbook de respuesta</option>
+        <option value="review">Revisión contra checklist</option>
+        <option value="report">Informe recurrente</option>
+        <option value="mcp">Escaneo con MCP conectado</option>
+      </select>
+    </label>
+    <details class="fold" id="fold-import">
+      <summary><span class="caret"></span><span class="n">··</span> cargar un SKILL.md existente <span class="opt">auditar</span></summary>
+      <div class="fold-in">
+        <p class="note">Pegá una skill que ya tengas y el linter la evalúa. Reconoce el formato que produce esta herramienta; de otras se queda con lo que entiende y te dice qué descartó.</p>
+        <textarea id="imp" rows="5" placeholder="---&#10;name: mi-skill&#10;description: …&#10;---"></textarea>
+        <div class="row" style="margin-top:7px">
+          <button class="btn sm" id="doImport" type="button">analizar</button>
+          <button class="btn ghost sm" id="clrImport" type="button">limpiar</button>
+          <button class="btn ghost sm" id="wipe" type="button" style="margin-left:auto">descartar borrador guardado</button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section class="block">
+    <div class="eyebrow"><span class="n">01</span> metadata <span class="always">siempre en contexto</span></div>
+    <label>
+      <span class="lab">name <span class="hint">kebab-case. Tiene que coincidir con el nombre del directorio.</span></span>
+      <input type="text" id="name" placeholder="phishing-triage" autocomplete="off">
+    </label>
+    <label>
+      <span class="lab">description :: qué hace <span class="hint">Una frase. Verbo primero.</span></span>
+      <textarea id="what" rows="2" placeholder="Analiza correos sospechosos reportados por usuarios y decide si son phishing."></textarea>
+    </label>
+    <label>
+      <span class="lab">description :: cuándo dispararse <span class="hint">Lo que más pesa. Sin esto, la skill no se activa.</span></span>
+      <textarea id="when" rows="2" placeholder="Usar siempre que el usuario pegue el contenido de un mail, comparta headers, o pregunte si un correo es legítimo."></textarea>
+    </label>
+    <label>
+      <span class="lab">vocabulario de disparo <span class="hint">Términos que la persona escribe de verdad, no los del manual.</span></span>
+      <input type="text" id="kw" placeholder="headers, .eml, remitente, DMARC" autocomplete="off">
+      <div class="chips" id="chips"></div>
+    </label>
+    <label>
+      <span class="lab">cuándo NO dispararse <span class="hint">Los casos vecinos que se le parecen. Es lo que evita que le robe el turno a otra skill.</span></span>
+      <textarea id="anti" rows="2" placeholder="No usar para analizar un binario adjunto: para eso está malware-triage."></textarea>
+    </label>
+  </section>
+
+  <details class="fold" id="fold-tools">
+    <summary><span class="caret"></span><span class="n">02</span> herramientas <span class="sec-badge" id="badge-tools"></span><span class="opt">opcional</span></summary>
+    <div class="fold-in">
+      <p class="note">Una skill no conecta nada: usa lo que ya está disponible en la sesión. Declarar una herramienta es decirle a Claude que la use — no garantiza que exista. Por eso <b>cada MCP necesita su plan B</b>.</p>
+      <label>
+        <span class="lab c">herramientas nativas <span class="hint">Se emiten en <code>allowed-tools</code>: pre-aprueban el uso sin preguntar. No restringen nada.</span></span>
+        <div class="chips" id="toolchips"></div>
+      </label>
+      <div style="margin-bottom:12px">
+        <div class="lab c">servidores MCP <span class="hint">En Claude Code las herramientas se nombran <code>mcp__servidor__herramienta</code>.</span></div>
+        <div id="mcps"></div>
+        <button class="btn ghost sm" id="addMcp" type="button">+ agregar servidor</button>
+      </div>
+      <label>
+        <span class="lab c">compatibility <span class="hint">Campo libre del estándar. Documenta qué necesita la skill. Informativo: nadie lo ejecuta.</span></span>
+        <input type="text" id="compat" placeholder="Requiere el servidor MCP semgrep conectado." autocomplete="off">
+      </label>
+    </div>
+  </details>
+
+  <section class="block">
+    <div class="eyebrow"><span class="n">03</span> cuerpo — se carga al disparar</div>
+    <label>
+      <span class="lab">propósito <span class="hint">Una línea: qué resuelve y para quién.</span></span>
+      <textarea id="purpose" rows="2" placeholder="Decide si un correo reportado es phishing, con las señales que sostienen el veredicto."></textarea>
+    </label>
+    <div style="margin-bottom:12px">
+      <div class="lab">pasos <span class="hint">En imperativo. El orden importa.</span></div>
+      <div id="steps"></div>
+      <button class="btn ghost sm" id="addStep" type="button">+ agregar paso</button>
+    </div>
+    <label>
+      <span class="lab">formato de salida <span class="hint">Literal. Si no lo fijás, cada corrida sale distinta.</span></span>
+      <textarea id="fmt" rows="3" placeholder="**Veredicto:** phishing / sospechoso / legítimo&#10;**Confianza:** alta / media / baja"></textarea>
+    </label>
+    <label>
+      <span class="lab">límites <span class="hint">Qué NO hace, y qué decir si te lo piden igual.</span></span>
+      <textarea id="limits" rows="2" placeholder="No redacta correos de phishing ni plantillas de pretexto, ni siquiera para simulacros."></textarea>
+    </label>
+    <label>
+      <span class="lab">caso degradado <span class="hint">Qué hacer cuando falta información.</span></span>
+      <textarea id="degraded" rows="2" placeholder="Si faltan los headers, decilo: sin ellos no se verifica autenticación."></textarea>
+    </label>
+  </section>
+
+  <details class="fold" id="fold-phrases">
+    <summary><span class="caret"></span><span class="n">04</span> banco de frases <span class="sec-badge" id="badge-phrases"></span><span class="opt">probar disparo</span></summary>
+    <div class="fold-in">
+      <p class="note">Escribí frases como las escribiría alguien de verdad — con rutas, nombres propios, minúsculas, apuro. Marcá si <span style="color:var(--phos)">SÍ</span> o <span style="color:var(--red)">NO</span> debería dispararse. Las que no deberían y se parecen mucho son las que más te enseñan. <b>Esto mide coincidencia léxica, no predice el clasificador.</b></p>
+      <div id="phrases"></div>
+      <button class="btn ghost sm" id="addPhr" type="button">+ agregar frase</button>
+    </div>
+  </details>
+
+  <details class="fold" id="fold-res">
+    <summary><span class="caret"></span><span class="n">05</span> recursos <span class="sec-badge" id="badge-res"></span><span class="opt">solo bajo demanda</span></summary>
+    <div class="fold-in">
+      <label>
+        <span class="lab v">archivos anexos <span class="hint">Uno por línea, como <code>ruta | leer cuando…</code>. Casi nunca hacen falta al principio.</span></span>
+        <textarea id="res" rows="2" placeholder="references/headers.md | Haya que interpretar un header poco común"></textarea>
+      </label>
+    </div>
+  </details>
+</div>
+
+<div class="pane right">
+  <div class="out">
+    <div class="out-bar">
+      <div class="fname" id="path"><span>~/.claude/skills/</span>mi-skill<span>/</span>SKILL.md</div>
+      <div class="row">
+        <span class="saved" id="saved">guardado</span>
+        <button class="btn ghost sm" id="copy" type="button">copiar</button>
+        <button class="btn sm" id="dl" type="button">descargar</button>
+      </div>
+    </div>
+    <pre class="code" id="code"></pre>
+    <div class="dest">
+      Claude Code · <code>~/.claude/skills/&lt;name&gt;/SKILL.md</code> &nbsp;|&nbsp;
+      claude.ai · subir el archivo en Ajustes → Capacidades → Skills
+    </div>
+  </div>
+
+  <div class="diag">
+    <div class="diag-bar">
+      <div class="t">// DIAGNÓSTICOS</div>
+      <div class="tally" id="tally"></div>
+    </div>
+    <div class="gauge">
+      <div class="gauge-lab"><span>fuerza de disparo</span><b id="score">0%</b></div>
+      <div class="bars" id="bars"></div>
+    </div>
+    <ul class="msgs" id="msgs" aria-live="polite"></ul>
+  </div>
+</div>
+</main>
+
+<footer>
+  <div class="foot">
+    <svg class="mark" viewBox="0 0 1055 1340" role="img" aria-label="PV"><title>PV</title><path fill="currentColor" fill-rule="evenodd" d="M232.4,1014.4C111.9,842.8 13.0,701.9 12.6,701.2C12.0,700.3 56.2,700.0 231.9,700.0L452.0,700.0L452.0,812.8L452.0,925.7L442.8,933.6C437.7,938.0 409.6,961.9 380.3,986.8L327.2,1032.1L383.7,1112.8C414.8,1157.2 442.9,1197.2 446.1,1201.8L452.0,1210.0L451.8,1268.2L451.5,1326.3L232.4,1014.4Z M514.0,1013.2L514.0,700.0L561.0,700.0L608.0,700.0L608.2,877.0L608.5,1053.9L732.0,878.8C799.9,782.5 856.2,702.8 857.0,701.8C858.4,700.0 860.9,700.0 907.3,700.2L956.1,700.5L735.9,1012.5C614.8,1184.1 515.4,1324.9 514.9,1325.5C514.4,1326.0 514.0,1192.8 514.0,1013.2Z M372.8,916.6L387.0,896.2L387.0,829.1L387.0,762.0L305.0,762.0L222.9,762.0L229.7,770.8C233.4,775.6 263.7,815.0 296.9,858.3C330.1,901.6 357.6,937.0 357.9,937.0C358.2,937.0 364.9,927.8 372.8,916.6Z M676.0,655.5C675.4,654.7 675.0,653.4 675.2,652.6C675.4,651.8 692.0,633.8 712.1,612.8C774.6,547.4 775.5,546.2 775.4,533.5C775.2,515.9 756.0,486.9 721.6,452.4C696.8,427.6 680.3,414.4 638.9,386.0C601.3,360.2 587.9,350.6 574.0,339.1C549.5,319.0 520.1,289.3 495.5,259.7C489.6,252.6 484.5,247.0 484.0,247.2C483.6,247.4 480.0,251.6 476.0,256.5C462.3,273.3 448.6,288.5 431.0,306.1C403.1,334.1 388.5,345.8 339.0,380.0C286.1,416.6 273.0,426.9 248.4,451.4C211.8,488.1 189.3,524.6 193.8,539.8C196.1,547.4 211.7,565.6 253.2,609.2C265.4,622.0 278.9,636.2 283.2,640.7C291.0,649.0 292.3,651.7 289.5,654.0C287.5,655.7 284.3,654.2 271.0,645.7C220.3,612.9 182.4,580.7 173.3,562.5C169.7,555.4 168.7,548.4 169.3,533.4C170.2,513.0 171.0,509.3 178.3,493.5C192.2,463.2 209.2,418.9 227.3,365.5C260.7,267.5 283.8,209.6 311.5,155.0C328.7,121.2 336.5,112.7 376.5,83.5C409.2,59.6 466.8,25.0 473.8,25.0C478.7,25.0 478.5,23.5 481.6,120.5C483.8,192.4 484.6,212.7 484.9,199.5C485.0,197.3 485.9,166.2 487.0,130.5C490.4,17.2 489.8,25.0 494.7,25.0C503.9,25.0 560.8,59.7 601.8,90.4C623.4,106.6 636.6,118.9 643.2,128.9C655.8,148.1 681.9,204.7 703.7,259.7C715.0,288.4 736.4,347.0 740.0,359.1C748.7,388.2 763.7,429.9 776.2,460.0C798.6,513.6 800.5,519.7 800.5,538.0C800.4,555.4 796.0,565.9 782.4,580.9C767.5,597.4 724.0,630.3 689.2,651.4C679.3,657.4 677.9,657.8 676.0,655.5Z M468.5,570.2C427.8,548.9 380.2,511.4 366.1,489.6C360.7,481.3 360.3,480.1 362.2,478.2C365.1,475.3 370.4,477.7 432.5,510.8C468.9,530.2 477.8,534.5 483.0,535.4C487.8,536.3 494.3,533.3 537.7,510.2C602.6,475.7 608.1,473.4 608.0,480.3C607.9,483.4 595.8,500.1 587.5,508.5C565.5,530.8 499.0,575.0 485.3,576.6C482.1,577.0 479.4,576.0 468.5,570.2Z"/></svg>
+    <p><b>skill-forge</b> — compilador y linter de SKILL.md<br>el archivo compila local: nada de lo que escribas sale del navegador</p>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id)};
+
+/* ── plantillas ─────────────────────────────────────── */
+var PRESETS={
+ blank:{name:"",what:"",when:"",kw:"",anti:"",purpose:"",steps:["",""],fmt:"",limits:"",degraded:"",res:"",compat:"",tools:[],mcps:[],phrases:[]},
+ triage:{
+  name:"phishing-triage",
+  what:"Analiza correos sospechosos reportados por usuarios y decide si son phishing.",
+  when:"Usar siempre que el usuario pegue el contenido de un mail, comparta headers, suba un .eml, o pregunte si un correo es legítimo.",
+  kw:"headers, .eml, remitente, DMARC, adjunto sospechoso",
+  anti:"No usar para analizar el binario de un adjunto ni para escribir reglas de detección: eso es triage de malware.",
+  purpose:"Decide si un correo reportado es phishing, con las señales concretas que sostienen el veredicto.",
+  steps:["Comparar el From visible contra el Return-Path y el dominio real.",
+         "Revisar SPF, DKIM y DMARC en los headers.",
+         "Mostrar el destino real de cada enlace, no el texto visible.",
+         "Señalar adjuntos con extensión ejecutable o doble extensión.",
+         "Identificar las señales de presión: urgencia, amenaza de cierre, pedido de credenciales."],
+  fmt:"**Veredicto:** phishing / sospechoso / legítimo\n**Confianza:** alta / media / baja\n**Por qué:** las dos o tres señales que más pesaron",
+  limits:"No redacta correos de phishing ni plantillas de pretexto, ni siquiera presentados como simulacro interno.",
+  degraded:"Si faltan los headers, decilo: sin ellos no se verifica autenticación y el veredicto queda limitado a señales de contenido.",
+  res:"",compat:"",tools:["Read"],mcps:[],
+  phrases:[{t:"me llegó esto de supuestamente el banco, lo pego abajo. es real?",p:1},
+           {t:"che tengo el .eml en ~/Downloads/reporte_usuario.eml, le pegas una mirada?",p:1},
+           {t:"analizame el .exe que venía adjunto en ese mail",p:0}]},
+ playbook:{
+  name:"incident-response",
+  what:"Guía la respuesta a un incidente confirmado, desde la contención hasta el informe de cierre.",
+  when:"Usar siempre que el usuario diga que tiene un incidente activo, un endpoint comprometido, ransomware corriendo, o pregunte qué hacer primero ante una alerta confirmada.",
+  kw:"incidente, comprometido, contención, ransomware, alerta confirmada",
+  anti:"No usar para analizar evidencia después del hecho ni para armar la línea de tiempo forense: eso es análisis post mortem.",
+  purpose:"Ordena la respuesta ante un incidente confirmado y evita que se pierda evidencia por apurar la contención.",
+  steps:["Establecer el alcance: qué sistemas, qué usuarios, desde cuándo.",
+         "Preservar la evidencia volátil antes de aislar o apagar nada.",
+         "Contener: aislar de red sin apagar el equipo.",
+         "Erradicar solo después de entender el vector de entrada.",
+         "Documentar la línea de tiempo con horarios y fuente de cada dato."],
+  fmt:"**Estado:** contenido / en curso / erradicado\n**Alcance:** sistemas y usuarios afectados\n**Vector:** cómo entró, o \"no determinado\"\n**Próximo paso:** una sola acción, la más urgente",
+  limits:"No toma decisiones de notificación regulatoria ni legal: eso lo define el área correspondiente.",
+  degraded:"Si el vector de entrada no está claro, decilo antes de recomendar erradicación — erradicar sin entender el vector garantiza la reinfección.",
+  res:"references/aislamiento.md | Haya que aislar un sistema de un tipo no cubierto arriba",
+  compat:"",tools:["Bash","Read"],mcps:[],
+  phrases:[{t:"tengo ransomware corriendo en dos servidores de la sucursal, qué hago primero",p:1},
+           {t:"me saltó una alerta del EDR y la confirmé, el equipo sigue prendido",p:1},
+           {t:"quiero revisar los logs del incidente del mes pasado para el informe",p:0}]},
+ review:{
+  name:"config-review",
+  what:"Revisa configuraciones contra un checklist de hardening y reporta los desvíos.",
+  when:"Usar siempre que el usuario pegue un archivo de configuración, pida revisar un hardening, mencione CIS Benchmark, o pregunte si una config es segura.",
+  kw:"config, hardening, CIS, nginx.conf, sshd_config, revisar",
+  anti:"No usar para revisar código de aplicación en busca de vulnerabilidades: eso es análisis estático de código.",
+  purpose:"Encuentra desvíos de configuración contra un baseline y los ordena por riesgo real, no por severidad nominal.",
+  steps:["Identificar el producto y la versión antes de evaluar nada.",
+         "Recorrer el checklist y marcar cada control como cumple / no cumple / no aplica.",
+         "Para cada desvío, dar la línea exacta y la corrección concreta.",
+         "Ordenar los hallazgos por explotabilidad en el contexto descrito, no por severidad genérica."],
+  fmt:"| Control | Estado | Línea | Corrección |\n\nCerrar con los tres desvíos de mayor riesgo y por qué.",
+  limits:"No aplica cambios ni genera scripts de remediación que corran sin revisión humana.",
+  degraded:"Si no se puede determinar la versión del producto, decilo: muchos controles dependen de ella y evaluarlos a ciegas produce falsos hallazgos.",
+  res:"references/cis-nginx.md | El producto sea nginx",
+  compat:"",tools:["Read","Grep"],mcps:[],
+  phrases:[{t:"te paso mi sshd_config, está bien hardened?",p:1},
+           {t:"revisá este nginx.conf contra CIS que lo tengo que presentar el viernes",p:1},
+           {t:"revisá este código python a ver si tiene inyección sql",p:0}]},
+ report:{
+  name:"weekly-secops-report",
+  what:"Arma el informe semanal de operaciones de seguridad con el formato que usa el equipo.",
+  when:"Usar siempre que el usuario pida el reporte semanal, el resumen de la semana, el informe para la gerencia, o pase métricas de alertas para consolidar.",
+  kw:"reporte semanal, resumen, informe gerencia, métricas de alertas",
+  anti:"No usar para el informe de un incidente puntual: ese tiene otra estructura y otro destinatario.",
+  purpose:"Consolida la actividad de la semana en el formato fijo que espera la gerencia.",
+  steps:["Consolidar el volumen de alertas por severidad y compararlo contra la semana previa.",
+         "Listar los incidentes que escalaron, con su estado actual.",
+         "Señalar las tendencias que se sostienen tres semanas o más — no las variaciones de una semana.",
+         "Cerrar con lo que necesita decisión de la gerencia, no con lo que ya se resolvió."],
+  fmt:"## Resumen\n## Alertas por severidad\n## Incidentes escalados\n## Tendencias\n## Requiere decisión",
+  limits:"No inventa cifras. Si falta una métrica, la deja marcada como pendiente en vez de estimarla.",
+  degraded:"Si faltan datos de alguna fuente, dejar la sección marcada como incompleta y decir qué fuente falta.",
+  res:"",compat:"",tools:["Read"],mcps:[],
+  phrases:[{t:"armame el semanal, te paso el export de alertas del SIEM",p:1},
+           {t:"necesito el resumen para la gerencia antes del lunes",p:1},
+           {t:"escribime el informe de cierre del incidente del jueves",p:0}]},
+ mcp:{
+  name:"repo-security-review",
+  what:"Revisa un repositorio en busca de patrones inseguros y explica el riesgo real de cada hallazgo.",
+  when:"Usar siempre que el usuario pida revisar la seguridad de un repo, mencione un escaneo de código, pregunte si un cambio introduce una vulnerabilidad, o comparta un diff para auditar.",
+  kw:"escanear repo, revisión de seguridad, vulnerabilidad, diff, SAST",
+  anti:"No usar para revisar configuración de infraestructura ni archivos de despliegue: eso es revisión de hardening.",
+  purpose:"Convierte hallazgos crudos de escaneo en un veredicto con contexto: qué es explotable acá y qué es ruido.",
+  steps:["Escanear el repositorio antes de leer nada, para no anclarse en lo primero que aparece.",
+         "Descartar los hallazgos que no son alcanzables desde una entrada controlada por el usuario.",
+         "Para cada hallazgo que queda, dar el archivo, la línea y el camino desde la entrada hasta el sink.",
+         "Proponer la corrección mínima que cierra el camino, no la refactorización ideal.",
+         "Ordenar por explotabilidad real en este repo, no por la severidad que trae la herramienta."],
+  fmt:"**Explotables:** cantidad\n**Ruido descartado:** cantidad y por qué\n\n| Archivo:línea | Riesgo | Camino | Corrección |",
+  limits:"No escribe exploits ni pruebas de concepto ofensivas, aunque sea para demostrar el hallazgo.",
+  degraded:"Si el escaneo no corre, decirlo de entrada y aclarar que la revisión manual cubre menos superficie — no presentarla como equivalente.",
+  res:"",
+  compat:"Aprovecha el servidor MCP semgrep si está conectado; funciona sin él con menor cobertura.",
+  tools:["Read","Grep","Glob"],
+  mcps:[{s:"semgrep",t:"semgrep_scan",w:"Escanear el repo completo antes de leer archivos a mano.",
+         f:"Recorrer a mano los puntos de entrada con Grep y decir explícitamente que la cobertura es menor."}],
+  phrases:[{t:"pasale una revisión de seguridad al repo que tengo en ~/dev/api-pagos",p:1},
+           {t:"este diff introduce alguna vuln? te lo pego",p:1},
+           {t:"revisá el docker-compose y el nginx.conf del deploy",p:0}]}
+};
+
+var SUGGEST=["headers",".eml","muestra","adjunto","alerta","log","config",
+             "revisá esto","es legítimo","qué hago","IOC","dump"];
+
+var NATIVE=["Bash","Read","Write","Edit","Glob","Grep","WebSearch","WebFetch"];
+
+/* ── estado ────────────────────────────────────────── */
+var tools=[];
+
+/* ── pasos ─────────────────────────────────────────── */
+function renderSteps(vals){
+  var box=$("steps"); box.innerHTML="";
+  vals.forEach(function(v,i){ box.appendChild(makeStep(v,i)); });
+  renumber();
+}
+function makeStep(v,i){
+  var row=document.createElement("div"); row.className="step";
+  var n=document.createElement("div"); n.className="num"; n.textContent=i+1;
+  var inp=document.createElement("input"); inp.type="text"; inp.value=v||"";
+  inp.placeholder="Verbo en imperativo primero…";
+  inp.addEventListener("input",compile);
+  // Enter encadena el paso siguiente: escribir una secuencia no deberia
+  // obligar a soltar el teclado entre paso y paso.
+  inp.addEventListener("keydown",function(ev){
+    if(ev.key!=="Enter") return;
+    ev.preventDefault();
+    var nx=makeStep("",0);
+    row.parentNode.insertBefore(nx,row.nextSibling);
+    renumber(); compile(); nx.querySelector("input").focus();
+  });
+
+  var mv=document.createElement("div"); mv.className="move";
+  function arrow(txt,lab,dir){
+    var b=document.createElement("button"); b.type="button";
+    b.textContent=txt; b.setAttribute("aria-label",lab);
+    b.addEventListener("click",function(){
+      var sib=dir<0?row.previousElementSibling:row.nextElementSibling;
+      if(!sib) return;
+      if(dir<0) row.parentNode.insertBefore(row,sib);
+      else row.parentNode.insertBefore(sib,row);
+      renumber(); compile(); inp.focus();
+    });
+    return b;
+  }
+  mv.appendChild(arrow("\u25b2","Subir paso",-1));
+  mv.appendChild(arrow("\u25bc","Bajar paso",1));
+
+  var del=document.createElement("button"); del.type="button"; del.className="kill";
+  del.textContent="\u00d7"; del.setAttribute("aria-label","Quitar paso");
+  del.addEventListener("click",function(){
+    if($("steps").children.length<=1){inp.value="";compile();return}
+    row.remove(); renumber(); compile();
+  });
+  row.appendChild(n); row.appendChild(inp); row.appendChild(mv); row.appendChild(del);
+  return row;
+}
+function renumber(){
+  var kids=$("steps").children, last=kids.length-1;
+  for(var i=0;i<kids.length;i++){
+    kids[i].firstChild.textContent=i+1;
+    var mv=kids[i].querySelector(".move");
+    if(mv){ mv.children[0].disabled=(i===0); mv.children[1].disabled=(i===last); }
+  }
+}
+function stepVals(){
+  return Array.prototype.map.call($("steps").querySelectorAll("input"),
+    function(i){return i.value.trim()}).filter(Boolean);
+}
+
+/* ── servidores MCP ────────────────────────────────── */
+function renderMcps(list){
+  var box=$("mcps"); box.innerHTML="";
+  (list||[]).forEach(function(m){ box.appendChild(makeMcp(m)); });
+}
+function makeMcp(m){
+  m=m||{};
+  var card=document.createElement("div"); card.className="mcp";
+  function field(key,lab,ph,val){
+    var l=document.createElement("label");
+    var s=document.createElement("span"); s.className="lab c"; s.textContent=lab;
+    var i=document.createElement("input"); i.type="text"; i.className="f-"+key;
+    i.placeholder=ph; i.value=val||""; i.autocomplete="off";
+    i.addEventListener("input",compile);
+    l.appendChild(s); l.appendChild(i);
+    return l;
+  }
+  var duo=document.createElement("div"); duo.className="duo";
+  duo.appendChild(field("s","servidor","semgrep",m.s));
+  duo.appendChild(field("t","herramienta","semgrep_scan",m.t));
+  card.appendChild(duo);
+  card.appendChild(field("w","para qué","Escanear el repo antes de leer archivos a mano.",m.w));
+  card.appendChild(field("f","si no está conectado","Decirlo y seguir con revisión manual, aclarando que cubre menos.",m.f));
+  var kill=document.createElement("button"); kill.type="button"; kill.className="kill";
+  kill.textContent="\u00d7"; kill.setAttribute("aria-label","Quitar servidor");
+  kill.addEventListener("click",function(){ card.remove(); compile(); });
+  card.appendChild(kill);
+  return card;
+}
+function mcpVals(){
+  return Array.prototype.map.call($("mcps").children,function(c){
+    function v(k){var el=c.querySelector(".f-"+k);return el?el.value.trim():""}
+    return {s:v("s"),t:v("t"),w:v("w"),f:v("f")};
+  }).filter(function(m){return m.s});
+}
+
+/* ── banco de frases ───────────────────────────────── */
+function renderPhrases(list){
+  var box=$("phrases"); box.innerHTML="";
+  (list||[]).forEach(function(p){ box.appendChild(makePhrase(p)); });
+}
+function makePhrase(p){
+  p=p||{t:"",p:1};
+  var row=document.createElement("div"); row.className="phr";
+  var pol=document.createElement("button"); pol.type="button";
+  pol.className="pol "+(p.p?"yes":"no"); pol.textContent=p.p?"SÍ":"NO";
+  pol.dataset.p=p.p?"1":"0";
+  pol.setAttribute("aria-label","Alternar si debería dispararse");
+  pol.addEventListener("click",function(){
+    var on=pol.dataset.p==="1";
+    pol.dataset.p=on?"0":"1";
+    pol.className="pol "+(on?"no":"yes");
+    pol.textContent=on?"NO":"SÍ";
+    compile();
+  });
+  var inp=document.createElement("input"); inp.type="text"; inp.value=p.t||"";
+  inp.placeholder="Como lo escribiría alguien apurado, con rutas y nombres reales…";
+  inp.addEventListener("input",compile);
+  var mini=document.createElement("div"); mini.className="mini";
+  for(var i=0;i<4;i++) mini.appendChild(document.createElement("i"));
+  var kill=document.createElement("button"); kill.type="button"; kill.className="kill";
+  kill.textContent="\u00d7"; kill.setAttribute("aria-label","Quitar frase");
+  kill.addEventListener("click",function(){ row.remove(); compile(); });
+  row.appendChild(pol); row.appendChild(inp); row.appendChild(mini); row.appendChild(kill);
+  return row;
+}
+function phraseVals(){
+  return Array.prototype.map.call($("phrases").children,function(r){
+    return {t:r.querySelector("input").value.trim(),
+            p:r.querySelector(".pol").dataset.p==="1",
+            row:r};
+  }).filter(function(p){return p.t});
+}
+
+/* ── chips ─────────────────────────────────────────── */
+function renderChips(){
+  var box=$("chips"); box.innerHTML="";
+  var cur=$("kw").value.toLowerCase();
+  SUGGEST.forEach(function(k){
+    var b=document.createElement("button");
+    b.type="button"; b.textContent=k;
+    b.className="chip"+(cur.indexOf(k.toLowerCase())>-1?" on":"");
+    b.addEventListener("click",function(){
+      var v=$("kw").value.trim();
+      var has=v.toLowerCase().indexOf(k.toLowerCase())>-1;
+      if(has){
+        $("kw").value=v.split(",").map(function(s){return s.trim()})
+          .filter(function(s){return s.toLowerCase()!==k.toLowerCase()}).join(", ");
+      }else{
+        $("kw").value=v?v+", "+k:k;
+      }
+      renderChips(); compile();
+    });
+    box.appendChild(b);
+  });
+}
+function renderToolChips(){
+  var box=$("toolchips"); box.innerHTML="";
+  NATIVE.forEach(function(t){
+    var b=document.createElement("button");
+    b.type="button"; b.textContent=t;
+    b.className="chip tool"+(tools.indexOf(t)>-1?" on":"");
+    b.addEventListener("click",function(){
+      var i=tools.indexOf(t);
+      if(i>-1) tools.splice(i,1); else tools.push(t);
+      renderToolChips(); compile();
+    });
+    box.appendChild(b);
+  });
+}
+
+/* ── normalización ─────────────────────────────────── */
+function norm(s){
+  return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+}
+function slug(s){
+  return norm(s).trim().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+}
+function titleize(s){
+  if(!s) return "Mi Skill";
+  return s.split("-").map(function(w){return w.charAt(0).toUpperCase()+w.slice(1)}).join(" ");
+}
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+
+// YAML: escapar solo si el escalar plano rompería el parseo.
+function yaml(v){
+  var s=(v||"").replace(/\s*\n\s*/g," ").trim();
+  if(!s) return "";
+  if(/^[>|&*!%@`\-?{}\[\],#]/.test(s) || /:\s/.test(s) || /\s#/.test(s) || /["']/.test(s)){
+    return '"'+s.replace(/\\/g,"\\\\").replace(/"/g,'\\"')+'"';
+  }
+  return s;
+}
+function endDot(s){ return s.replace(/\s*$/,"").replace(/([^.!?])$/,"$1."); }
+
+/* ── description completa ──────────────────────────── */
+function fullDescription(){
+  var what=$("what").value.trim();
+  var when=$("when").value.trim();
+  var kw=$("kw").value.trim();
+  var anti=$("anti").value.trim();
+  var parts=[];
+  if(what) parts.push(endDot(what));
+  if(when) parts.push(endDot(when));
+  if(kw) parts.push("Aplica también cuando mencione "+kw+".");
+  if(anti) parts.push(endDot(anti));
+  return parts.join(" ");
+}
+
+/* ── construcción del SKILL.md ─────────────────────── */
+function build(){
+  var nm=slug($("name").value)||"mi-skill";
+  var L=[];
+  L.push("---");
+  L.push("name: "+nm);
+  var d=fullDescription();
+  L.push("description: "+(d?yaml(d):""));
+  if(tools.length) L.push("allowed-tools: "+tools.join(", "));
+  var cp=$("compat").value.trim();
+  if(cp) L.push("compatibility: "+yaml(cp));
+  L.push("---");
+  L.push("");
+  L.push("# "+titleize(nm));
+  L.push("");
+  var p=$("purpose").value.trim();
+  if(p){ L.push(p); L.push(""); }
+
+  var mv=mcpVals();
+  if(tools.length||mv.length){
+    L.push("## Herramientas");
+    L.push("");
+    if(tools.length){
+      L.push("Nativas disponibles: "+tools.map(function(t){return "`"+t+"`"}).join(", ")+".");
+      L.push("");
+    }
+    mv.forEach(function(m){
+      var head="- MCP `"+m.s+"`"+(m.t?" \u2192 `"+m.t+"`":"")+(m.w?": "+m.w:"");
+      L.push(head);
+      L.push("  - Si el servidor no está conectado: "+(m.f||"decirlo antes de seguir y aclarar qué parte del análisis queda sin cubrir."));
+    });
+    if(mv.length) L.push("");
+  }
+
+  var sv=stepVals();
+  if(sv.length){
+    L.push("## Pasos");
+    L.push("");
+    sv.forEach(function(s,i){ L.push((i+1)+". "+s); });
+    L.push("");
+  }
+  var f=$("fmt").value.trim();
+  if(f){
+    L.push("## Formato de salida");
+    L.push("");
+    L.push("Cerrá siempre con:");
+    L.push("");
+    f.split("\n").forEach(function(l){ L.push(l); });
+    L.push("");
+  }
+  var dg=$("degraded").value.trim();
+  if(dg){
+    L.push("## Cuando falta información");
+    L.push("");
+    L.push(dg);
+    L.push("");
+  }
+  var r=$("res").value.trim();
+  if(r){
+    L.push("## Recursos");
+    L.push("");
+    L.push("| Archivo | Leer cuando |");
+    L.push("|---|---|");
+    r.split("\n").forEach(function(l){
+      if(!l.trim())return;
+      // separar en el primer | unicamente, y escapar los que vengan en el texto,
+      // o un "leer cuando" con pipe parte la tabla markdown
+      var i=l.indexOf("|");
+      var ruta=(i<0?l:l.slice(0,i)).trim();
+      var cuando=(i<0?"":l.slice(i+1)).trim()||"Sea necesario";
+      L.push("| `"+ruta.replace(/\|/g,"\\|")+"` | "+cuando.replace(/\|/g,"\\|")+" |");
+    });
+    L.push("");
+  }
+  var lm=$("limits").value.trim();
+  if(lm){
+    L.push("## Límites");
+    L.push("");
+    L.push(lm);
+    L.push("");
+  }
+  while(L.length && L[L.length-1]==="") L.pop();
+  return L.join("\n")+"\n";
+}
+
+/* ── resaltado ─────────────────────────────────────── */
+function highlight(src){
+  var inFm=false, n=0;
+  return src.split("\n").map(function(l){
+    n++;
+    var s=String(n); while(s.length<2) s=" "+s;
+    var num='<span class="dim">'+s+"  </span>";
+    var e=esc(l), cls="";
+    if(l==="---"){ inFm=!inFm; cls='<span class="fm">'+e+"</span>"; }
+    else if(inFm && /^[a-z-]+:/.test(l)){
+      var i=l.indexOf(":");
+      cls='<span class="key">'+esc(l.slice(0,i+1))+"</span>"+esc(l.slice(i+1));
+    }
+    else if(/^#{1,3}\s/.test(l)) cls='<span class="h">'+e+"</span>";
+    else if(/^(\s*\d+\.|\||\s*-)\s?/.test(l)) cls='<span class="li">'+e+"</span>";
+    else cls=e;
+    return num+cls;
+  }).join("\n");
+}
+
+/* ── cobertura léxica de frases ────────────────────── */
+var STOP=("de la el que y en un una por con para los las se del al es esto esta este me mi lo le su sus no si mas como pero "+
+ "qué que cuando donde hay ser tiene tengo hacer hago puedo quiero necesito ayuda favor gracias ok bueno che dale "+
+ "te te lo pego pegar mira mirada a o u e ya te vos yo nos son era fue muy tan asi").split(/\s+/);
+
+function vocabTerms(){
+  var out=[];
+  function push(s){ s=norm(s).trim(); if(s.length>2&&STOP.indexOf(s)<0&&out.indexOf(s)<0) out.push(s); }
+  $("kw").value.split(",").forEach(function(t){ t=t.trim(); if(t) out.push(norm(t)); });
+  slug($("name").value).split("-").forEach(push);
+  ($("what").value+" "+$("when").value).split(/[^A-Za-zÀ-ÿ0-9_.]+/).forEach(push);
+  return out.filter(function(t,i,a){return t&&a.indexOf(t)===i});
+}
+function coverage(phrase,terms){
+  var p=norm(phrase), hits=[];
+  terms.forEach(function(t){
+    if(!t) return;
+    if(p.indexOf(t)>-1 && hits.indexOf(t)<0) hits.push(t);
+  });
+  return hits;
+}
+
+/* ── linter ────────────────────────────────────────── */
+var TRIGGER=/\b(usar|us[aá]|utilizar|use[sr]?|aplica|activar|dispara|invocar)\b[^.]{0,40}\b(cuando|siempre que|si el|ante|when|apenas|cada vez)\b/i;
+var ASSERT=/\b(siempre que|siempre|always)\b/i;
+var DESCRIPTIVE=/^(el|la|los|las|se|un|una|este|esta|cuando|si)\b/i;
+var DESC_CAP=1536;
+
+function lint(md){
+  var m=[], nm=$("name").value.trim(), slugged=slug(nm);
+  var what=$("what").value.trim(), when=$("when").value.trim();
+  var kw=$("kw").value.trim(), anti=$("anti").value.trim();
+  var desc=fullDescription();
+  var dw=desc?desc.split(/\s+/).length:0, dc=desc.length;
+  var sv=stepVals(), mv=mcpVals(), pv=phraseVals(), score=0;
+
+  function add(sev,b,x,sec){m.push({s:sev,b:b,x:x||"",sec:sec||""})}
+
+  /* name — 8 */
+  if(!nm) add("e","Falta el <code>name</code>","Sin él la skill no carga.");
+  else if(nm!==slugged) add("e","<code>name</code> no es kebab-case",
+    "Se compiló como <code>"+esc(slugged)+"</code>. El directorio tiene que llamarse igual.");
+  else if(nm.length>40) add("w","<code>name</code> muy largo","Cuesta referirlo en conversación.");
+  else { add("o","<code>name</code> válido"); score+=8; }
+
+  /* qué hace — 12 */
+  if(!what) add("e","La description no dice qué hace","Es la mitad del disparo.");
+  else if(what.split(/\s+/).length<4) add("w","El “qué hace” es muy corto","Con 4 palabras no se distingue de otra skill.");
+  else { add("o","Dice qué hace"); score+=12; }
+
+  /* cuándo — 22, el que más pesa */
+  if(!when) add("e","La description no dice cuándo dispararse",
+    "Es lo único que decide si la skill se activa. Sin esto no se usa nunca, por buena que sea.");
+  else if(!TRIGGER.test(when)) add("w","El “cuándo” no tiene forma de condición de disparo",
+    "Empezalo con <code>Usar cuando…</code> o <code>Usar siempre que…</code> seguido de lo que hace la persona.");
+  else{
+    score+=16;
+    add("o","Declara condición de disparo");
+    if(ASSERT.test(when)){ score+=6; add("o","Redacción asertiva","<code>siempre que</code> reduce el sub-disparo."); }
+    else add("w","Redacción tibia","Claude tiende a no usar skills que podría usar. <code>Usar siempre que</code> gana a <code>usar cuando</code>.");
+  }
+
+  /* vocabulario — 12 */
+  var terms=kw?kw.split(",").map(function(s){return s.trim()}).filter(Boolean):[];
+  if(!terms.length) add("w","Sin vocabulario de disparo",
+    "Agregá 3 o 4 términos que la persona escribe de verdad: extensiones, nombres de herramientas, la frase con la que pediría esto.");
+  else if(terms.length<3){ score+=5; add("w","Poco vocabulario de disparo","Tenés "+terms.length+". Con 3 o 4 la cobertura mejora bastante."); }
+  else { score+=12; add("o",terms.length+" términos de disparo"); }
+
+  /* anti-disparadores — 8 */
+  if(!anti) add("w","Sin anti-disparadores",
+    "Escribí el caso vecino que se le parece y NO le corresponde. Es lo que evita que le robe el turno a otra skill.");
+  else if(!/\bno\b/i.test(anti)) add("w","El anti-disparador no niega nada",
+    "Redactalo como exclusión: <code>No usar para… para eso está X</code>.");
+  else { score+=8; add("o","Declara anti-disparadores"); }
+
+  /* presupuesto N1 — 8, sobre caracteres */
+  if(dc>DESC_CAP) add("e","description de "+dc+" caracteres",
+    "El listado corta en "+DESC_CAP+". Lo que pase de ahí no existe para el disparo.");
+  else if(dc>0&&dc<90) add("w","description de "+dc+" caracteres","Muy fina para competir con otras skills en la lista.");
+  else if(dc>1100) add("w","description de "+dc+" caracteres","Cerca del corte de "+DESC_CAP+". Lo esencial va primero.");
+  else if(dc>=90){ score+=8; add("o","description de "+dc+" caracteres","Dentro del presupuesto de nivel 1 ("+dw+" palabras)."); }
+
+  /* pasos — 10 */
+  if(!sv.length) add("e","Sin pasos","El cuerpo no le dice a Claude qué hacer.");
+  else if(sv.length<2) add("w","Un solo paso","Si es un paso, quizá no necesitás una skill.");
+  else{
+    score+=10;
+    add("o",sv.length+" pasos");
+    var desc_n=sv.filter(function(s){return DESCRIPTIVE.test(s.trim())}).length;
+    if(desc_n) add("w",desc_n+" paso"+(desc_n>1?"s":"")+" en modo descriptivo",
+      "Arrancan con artículo. El imperativo se ejecuta mejor: <code>Comparar el From…</code>, no <code>El From se compara…</code>");
+  }
+
+  /* formato — 8 */
+  if(!$("fmt").value.trim()) add("w","Sin formato de salida",
+    "Sin contrato literal, cada corrida sale con una estructura distinta.");
+  else { score+=8; add("o","Formato de salida fijado"); }
+
+  /* límites — 8 */
+  if(!$("limits").value.trim()) add("w","Sin sección de límites",
+    "Escribí qué NO hace. En seguridad es lo que separa una skill defensiva de una ambigua.");
+  else { score+=8; add("o","Límites declarados"); }
+
+  /* herramientas — 8 */
+  var toolOk=true;
+  mv.forEach(function(x){
+    if(!x.f){
+      toolOk=false;
+      add("w","MCP <code>"+esc(x.s)+"</code> sin plan B",
+        "Si el servidor no está conectado la instrucción se cae en silencio y no te enterás. Escribí qué hacer sin él.",
+        "tools");
+    }
+    if(!x.w) add("w","MCP <code>"+esc(x.s)+"</code> sin propósito",
+      "Decir qué herramienta usar sin decir para qué deja la decisión al azar.","tools");
+    if(!x.t) add("w","MCP <code>"+esc(x.s)+"</code> sin herramienta",
+      "Nombrá la herramienta concreta del servidor, no solo el servidor.","tools");
+  });
+  if(mv.length&&toolOk){ score+=4; add("o",mv.length+" MCP con plan B","La skill sigue sirviendo si el servidor no está.","tools"); }
+  if(!mv.length&&!tools.length){ score+=4; add("o","Sin dependencias externas","La skill corre con lo que haya."); }
+  if(mv.length&&!$("compat").value.trim())
+    add("w","Sin <code>compatibility</code>","Dejá escrito qué servidor necesita. No lo ejecuta nadie, pero el que la instale lo lee.","tools");
+  if(tools.length){
+    add("o",tools.length+" herramienta"+(tools.length>1?"s":"")+" nativa"+(tools.length>1?"s":"")+" pre-aprobada"+(tools.length>1?"s":""),
+      "<code>allowed-tools</code> evita el pedido de permiso; no impide usar otras.","tools");
+  }
+  // herramienta mencionada en los pasos pero no declarada
+  var body=sv.join(" ").toLowerCase();
+  NATIVE.concat(mv.map(function(x){return x.s})).forEach(function(t){
+    if(!t) return;
+    var declared=tools.indexOf(t)>-1||mv.some(function(x){return x.s===t});
+    if(!declared && body.indexOf(norm(t))>-1)
+      add("w","Los pasos mencionan <code>"+esc(t)+"</code> sin declararlo","Declaralo arriba o sacalo del paso.","tools");
+  });
+
+  /* banco de frases — sin puntaje, pero enseña */
+  var vt=vocabTerms();
+  var colisiones=0, huerfanas=0;
+  pv.forEach(function(p){
+    var hits=coverage(p.t,vt), n=hits.length;
+    var mini=p.row.querySelector(".mini").children;
+    // SÍ: más coincidencias, mejor. NO: más coincidencias, peor (cero es lo ideal).
+    var klass = p.p ? (n>=2?"on":n===1?"mid":"bad") : (n>=2?"bad":n===1?"mid":"on");
+    var lit = Math.max(Math.min(n,4),1);
+    for(var i=0;i<4;i++) mini[i].className = i<lit ? klass : "";
+    if(p.p&&n<2){
+      huerfanas++;
+      add("w","Frase que debería disparar y casi no comparte vocabulario",
+        "<span class=\"msg-x\">“"+esc(p.t.slice(0,70))+(p.t.length>70?"…":"")+"”</span> — "+
+        (n?"solo coincide en <code>"+esc(hits[0])+"</code>":"ni un término en común")+". Sumá esas palabras al vocabulario.","phrases");
+    }
+    if(!p.p&&n>=2){
+      colisiones++;
+      add("w","Colisión: frase que NO debería disparar comparte "+n+" términos",
+        "<span class=\"msg-x\">“"+esc(p.t.slice(0,70))+(p.t.length>70?"…":"")+"”</span> — "+
+        esc(hits.slice(0,3).join(", "))+". Acotá el “cuándo” o nombrá este caso en los anti-disparadores.","phrases");
+    }
+  });
+  if(pv.length&&!colisiones&&!huerfanas) add("o",pv.length+" frases sin colisiones","Cobertura léxica limpia.","phrases");
+  if(!pv.length) add("w","Banco de frases vacío",
+    "Tres frases reales — dos que deberían disparar y una vecina que no — te dicen más que cualquier puntaje.","phrases");
+
+  /* extras sin puntaje */
+  if($("degraded").value.trim()) add("o","Caso degradado cubierto");
+  else add("w","Sin caso degradado","¿Qué hace la skill cuando le falta información? Definilo o improvisa.");
+
+  var lines=md.split("\n").length;
+  if(lines>500) add("e","Cuerpo de "+lines+" líneas","Pasa el presupuesto de nivel 2. Partí el detalle a <code>references/</code>.","res");
+  else if(lines>380) add("w","Cuerpo de "+lines+" líneas","Cerca del límite de 500. Pensá en partir a <code>references/</code>.","res");
+
+  if(nm && what && norm(what).indexOf(slugged.replace(/-/g," "))>-1 && what.split(/\s+/).length<7)
+    add("w","El “qué hace” repite el name","Decí algo que el nombre no diga ya.");
+
+  return {msgs:m,score:Math.min(100,score),lines:lines,words:dw,chars:dc};
+}
+
+/* ── render ────────────────────────────────────────── */
+function compile(){
+  var md=build();
+  $("code").innerHTML=highlight(md);
+  var nm=slug($("name").value)||"mi-skill";
+  $("path").innerHTML='<span>~/.claude/skills/</span>'+esc(nm)+'<span>/</span>SKILL.md';
+
+  var r=lint(md);
+
+  var ul=$("msgs"); ul.innerHTML="";
+  var order={e:0,w:1,o:2};
+  r.msgs.sort(function(a,b){return order[a.s]-order[b.s]});
+  r.msgs.forEach(function(x){
+    var li=document.createElement("li");
+    li.innerHTML='<span class="tag t-'+x.s+'">'+
+      (x.s==="e"?"[ERR]":x.s==="w"?"[WRN]":"[ OK]")+'</span>'+
+      '<span><span class="msg-b">'+x.b+'</span>'+(x.x?' <span class="msg-x">'+x.x+'</span>':'')+'</span>';
+    ul.appendChild(li);
+  });
+
+  var e=r.msgs.filter(function(x){return x.s==="e"}).length;
+  var w=r.msgs.filter(function(x){return x.s==="w"}).length;
+  var o=r.msgs.filter(function(x){return x.s==="o"}).length;
+  $("tally").innerHTML='<b class="e">'+e+'</b> err &nbsp;<b class="w">'+w+'</b> avi &nbsp;<b class="o">'+o+'</b> ok';
+
+  /* insignias por sección plegada */
+  ["tools","phrases","res"].forEach(function(sec){
+    var n=r.msgs.filter(function(x){return x.sec===sec&&x.s!=="o"}).length;
+    var b=$("badge-"+sec);
+    b.textContent=n?n+(n>1?" avisos":" aviso"):"";
+    b.className="sec-badge"+(n?" show":"");
+  });
+
+  $("score").textContent=r.score+"%";
+  var bars=$("bars"); bars.innerHTML="";
+  var lit=Math.round(r.score/5);
+  var klass=r.score>=75?"on":r.score>=45?"mid":"low";
+  for(var i=0;i<20;i++){
+    var b=document.createElement("i");
+    if(i<lit) b.className=klass;
+    bars.appendChild(b);
+  }
+
+  $("lvl1").innerHTML="N1 metadata <b>"+r.chars+"</b> car";
+  $("lvl1").className="lvl"+(r.chars>DESC_CAP?" bad":r.chars&&r.chars<90?" warn":"");
+  $("lvl2").innerHTML="N2 cuerpo <b>"+r.lines+"</b>/500 lín";
+  $("lvl2").className="lvl"+(r.lines>500?" bad":r.lines>380?" warn":"");
+  var nres=$("res").value.split("\n").filter(function(l){return l.trim()}).length;
+  $("lvl3").innerHTML="N3 recursos <b>"+nres+"</b>";
+  $("lvl3").className="lvl";
+
+  save();
+}
+
+/* ── importar un SKILL.md ──────────────────────────── */
+function importMd(src){
+  var fm={}, body=src, known=[], unknown=[];
+  var mfm=src.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+  if(mfm){
+    mfm[1].split(/\r?\n/).forEach(function(l){
+      var i=l.indexOf(":");
+      if(i<1) return;
+      var k=l.slice(0,i).trim(), v=l.slice(i+1).trim();
+      if(/^".*"$/.test(v)) v=v.slice(1,-1).replace(/\\"/g,'"').replace(/\\\\/g,"\\");
+      fm[k]=v;
+    });
+    body=mfm[2];
+  } else unknown.push("frontmatter");
+
+  /* metadata */
+  $("name").value=fm.name||"";
+  if(fm.name) known.push("name");
+  $("compat").value=fm.compatibility||"";
+  if(fm.compatibility) known.push("compatibility");
+  tools=(fm["allowed-tools"]||"").split(/[,\s]+/).filter(Boolean);
+  if(tools.length) known.push("allowed-tools");
+
+  /* partir la description */
+  var d=fm.description||"";
+  var what="",when="",kw="",anti="";
+  if(d){
+    known.push("description");
+    var rest=d;
+    var ma=rest.match(/(^|\s)(No\s+(?:usar|utilizar|aplica|corresponde)[\s\S]*)$/i);
+    if(ma){ anti=ma[2].trim(); rest=rest.slice(0,ma.index).trim(); }
+    var mk=rest.match(/(^|\s)Aplica\s+también\s+cuando\s+mencione\s+([^.]*)\.?/i);
+    if(mk){ kw=mk[2].trim(); rest=(rest.slice(0,mk.index)+" "+rest.slice(mk.index+mk[0].length)).trim(); }
+    var mw=rest.match(/(Usar|Usá|Utilizar|Use|Aplicar)\s+(siempre que|cuando|ante|apenas|cada vez)[\s\S]*$/i);
+    if(mw){ when=mw[0].trim(); what=rest.slice(0,mw.index).trim(); }
+    else { what=rest.trim(); }
+  }
+  $("what").value=what; $("when").value=when; $("kw").value=kw; $("anti").value=anti;
+
+  /* secciones del cuerpo */
+  var secs={}, order=[];
+  var cur=null;
+  body.split(/\r?\n/).forEach(function(l){
+    var h=l.match(/^##\s+(.+?)\s*$/);
+    if(h){ cur=h[1]; secs[cur]=[]; order.push(cur); return; }
+    if(l.match(/^#\s+/)) { cur=null; return; }
+    if(cur) secs[cur].push(l); else { secs.__intro=secs.__intro||[]; secs.__intro.push(l); }
+  });
+  function grab(re){
+    for(var i=0;i<order.length;i++) if(re.test(order[i])){ var k=order[i]; order.splice(i,1); return (secs[k]||[]).join("\n").trim(); }
+    return "";
+  }
+  $("purpose").value=((secs.__intro||[]).join("\n")).trim();
+  if($("purpose").value) known.push("propósito");
+
+  var stepsTxt=grab(/^pasos|^procedimiento|^metodolog|^workflow|^steps|^c[oó]mo\s/i);
+  var sl=stepsTxt.split(/\r?\n/).map(function(l){return l.replace(/^\s*(?:\d+\.|[-*])\s*/,"").trim()}).filter(Boolean);
+  renderSteps(sl.length?sl:["",""]);
+  if(sl.length) known.push(sl.length+" pasos");
+
+  var toolsTxt=grab(/^herramientas|^tools/i);
+  var mcps=[];
+  if(toolsTxt){
+    known.push("herramientas");
+    var lines=toolsTxt.split(/\r?\n/);
+    for(var i=0;i<lines.length;i++){
+      var mm=lines[i].match(/^\s*-\s*MCP\s*`([^`]+)`(?:\s*(?:\u2192|->)\s*`([^`]+)`)?\s*:?\s*(.*)$/i);
+      if(mm){
+        var fb="";
+        var nx=lines[i+1]||"";
+        var mf=nx.match(/Si el servidor no está conectado:\s*(.*)$/i);
+        if(mf){ fb=mf[1].trim(); i++; }
+        mcps.push({s:mm[1],t:mm[2]||"",w:(mm[3]||"").trim(),f:fb});
+      }
+      var mn=lines[i].match(/Nativas disponibles:\s*(.*)$/i);
+      if(mn && !tools.length) tools=(mn[1].match(/`([^`]+)`/g)||[]).map(function(s){return s.replace(/`/g,"")});
+    }
+  }
+  renderMcps(mcps);
+
+  var f=grab(/^formato/i);
+  $("fmt").value=f.replace(/^Cerrá siempre con:\s*/i,"").trim();
+  if($("fmt").value) known.push("formato");
+
+  $("degraded").value=grab(/falta información|degradado|sin datos/i);
+  if($("degraded").value) known.push("caso degradado");
+
+  var resTxt=grab(/^recursos|^references/i);
+  var rl=[];
+  resTxt.split(/\r?\n/).forEach(function(l){
+    var mr=l.match(/^\|\s*`?([^`|]+)`?\s*\|\s*([^|]*)\|/);
+    if(mr && !/^-+$/.test(mr[1].trim()) && !/^archivo$/i.test(mr[1].trim()))
+      rl.push(mr[1].trim()+" | "+mr[2].trim());
+  });
+  $("res").value=rl.join("\n");
+  if(rl.length) known.push(rl.length+" recursos");
+
+  $("limits").value=grab(/^l[ií]mites|^restricciones/i);
+  if($("limits").value) known.push("límites");
+
+  order.forEach(function(k){ if(secs[k].join("").trim()) unknown.push("## "+k); });
+
+  renderChips(); renderToolChips(); compile();
+  if(mcps.length) $("fold-tools").open=true;
+  if(rl.length) $("fold-res").open=true;
+
+  var msg="reconocido: "+(known.length?known.join(", "):"nada");
+  if(unknown.length) msg+=" \u2014 sin mapear: "+unknown.join(", ");
+  toast(msg);
+}
+
+/* ── persistencia ──────────────────────────────────── */
+/* Vive en el navegador y puede no estar disponible (modo privado, iframe
+   con sandbox, file:// en algunos navegadores). Todo va con try/catch:
+   si falla, la herramienta funciona igual, solo que sin memoria. */
+var KEY="skill-forge:borrador", saveT=null, storeOK=true;
+
+function snapshot(){
+  var o={tools:tools.slice(),steps:stepVals(),mcps:mcpVals(),
+         phrases:phraseVals().map(function(p){return {t:p.t,p:p.p}})};
+  FIELDS.forEach(function(k){ o[k]=$(k).value; });
+  return o;
+}
+function save(){
+  if(!storeOK) return;
+  clearTimeout(saveT);
+  saveT=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify(snapshot()));
+      var el=$("saved"); el.className="saved on";
+      clearTimeout(el._t); el._t=setTimeout(function(){el.className="saved"},1400);
+    }catch(e){ storeOK=false; }
+  },400);
+}
+function restore(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw) return false;
+    var o=JSON.parse(raw);
+    FIELDS.forEach(function(k){ $(k).value=o[k]||""; });
+    tools=(o.tools||[]).slice();
+    renderSteps((o.steps&&o.steps.length)?o.steps:["",""]);
+    renderMcps(o.mcps||[]);
+    renderPhrases((o.phrases&&o.phrases.length)?o.phrases:[{t:"",p:1},{t:"",p:1},{t:"",p:0}]);
+    if((o.mcps||[]).length) $("fold-tools").open=true;
+    if((o.res||"").trim()) $("fold-res").open=true;
+    return true;
+  }catch(e){ storeOK=false; return false; }
+}
+
+/* ── acciones ──────────────────────────────────────── */
+function toast(t){
+  var el=$("toast"); el.textContent=t; el.classList.add("show");
+  clearTimeout(el._t); el._t=setTimeout(function(){el.classList.remove("show")},3200);
+}
+$("copy").addEventListener("click",function(){
+  var md=build();
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(md).then(function(){toast("copiado al portapapeles")},fallback);
+  } else fallback();
+  function fallback(){
+    var ta=document.createElement("textarea");
+    ta.value=md; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try{document.execCommand("copy");toast("copiado al portapapeles")}
+    catch(e){toast("No se pudo copiar — seleccioná el texto")}
+    document.body.removeChild(ta);
+  }
+});
+$("dl").addEventListener("click",function(){
+  var blob=new Blob([build()],{type:"text/markdown;charset=utf-8"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download="SKILL.md";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+  toast("mv SKILL.md ~/.claude/skills/"+(slug($("name").value)||"mi-skill")+"/");
+});
+$("addStep").addEventListener("click",function(){
+  var box=$("steps");
+  box.appendChild(makeStep("",box.children.length));
+  renumber();
+  box.lastChild.querySelector("input").focus();
+});
+$("addMcp").addEventListener("click",function(){
+  var box=$("mcps");
+  box.appendChild(makeMcp({}));
+  box.lastChild.querySelector("input").focus();
+  compile();
+});
+$("addPhr").addEventListener("click",function(){
+  var box=$("phrases");
+  box.appendChild(makePhrase({t:"",p:box.children.length%3===2?0:1}));
+  box.lastChild.querySelector("input").focus();
+  compile();
+});
+$("doImport").addEventListener("click",function(){
+  var src=$("imp").value.trim();
+  if(!src){ toast("pegá un SKILL.md primero"); return; }
+  try{ importMd(src); $("preset").value="blank"; }
+  catch(err){ toast("no se pudo interpretar: "+err.message); }
+});
+$("clrImport").addEventListener("click",function(){ $("imp").value=""; });
+$("wipe").addEventListener("click",function(){
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  $("preset").value="triage";
+  $("preset").dispatchEvent(new Event("change"));
+  toast("borrador descartado \u2014 volviste a la plantilla de triage");
+});
+
+var FIELDS=["name","what","when","kw","anti","purpose","fmt","limits","degraded","res","compat"];
+
+$("preset").addEventListener("change",function(){
+  var p=PRESETS[this.value];
+  FIELDS.forEach(function(k){ $(k).value=p[k]||""; });
+  tools=(p.tools||[]).slice();
+  renderSteps(p.steps.length?p.steps:["",""]);
+  renderMcps(p.mcps||[]);
+  renderPhrases((p.phrases&&p.phrases.length)?p.phrases:[{t:"",p:1},{t:"",p:1},{t:"",p:0}]);
+  renderChips(); renderToolChips(); compile();
+  $("fold-tools").open=(p.mcps||[]).length>0;
+  $("fold-res").open=!!(p.res||"").trim();
+});
+FIELDS.forEach(function(k){
+  $(k).addEventListener("input",function(){ if(k==="kw") renderChips(); compile(); });
+});
+
+
+/* favicon a partir de la misma marca */
+try{
+  var mk=document.querySelector(".brand .mark").cloneNode(true);
+  mk.removeAttribute("class"); mk.setAttribute("fill","#43F58C");
+  var t=mk.querySelector("title"); if(t) t.remove();
+  var lk=document.createElement("link"); lk.rel="icon";
+  lk.href="data:image/svg+xml;base64,"+btoa(new XMLSerializer().serializeToString(mk));
+  document.head.appendChild(lk);
+}catch(e){}
+
+/* ── arranque ──────────────────────────────────────── */
+var recuperado=restore();
+if(!recuperado){
+  var init=PRESETS.triage;
+  $("preset").value="triage";
+  FIELDS.forEach(function(k){ $(k).value=init[k]||""; });
+  tools=(init.tools||[]).slice();
+  renderSteps(init.steps);
+  renderMcps(init.mcps);
+  renderPhrases(init.phrases);
+}else{
+  $("preset").value="blank";
+}
+renderChips();
+renderToolChips();
+compile();
+if(recuperado) toast("borrador recuperado de la sesi\u00f3n anterior");
+})();
+</script>
+</body>
+</html>
